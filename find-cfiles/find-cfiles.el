@@ -18,11 +18,10 @@
 ;; If not, the user is promted to see if a new pair is to be created,
 ;; using either default or user supplied extensions.
 ;; 
-;; If the user does not specify an extension, find-cfiles first uses
-;; defaults in find-cfiles-[ch]filename and then a list of possible
-;; extensions in find-cfiles-[ch]filenamelist to and open existing
-;; files or buffers. (This shoul probably modified to use actual
-;; extension pairs and create missing members of pairs on the fly?)
+;; If the user does not specify an extension, find-cfiles first uses defaults
+;; in find-cfiles-[ch]ext and then a list of possible directory prefixes in
+;; find-cfiles-[ch]dirpreflist and extensions in find-cfiles-[ch]extlist to
+;; search for and open existing files or buffers.
 ;; 
 ;; If no files are found, new files are created with user-supplied
 ;; extension or the deraults from find-cfiles-[ch]filename.
@@ -71,62 +70,65 @@ Used a hook in find-file-not-found-hooks."
       (eval nil) ; loose if not dot-terminated
 ;;;
 ;;; User interaction (beggining of else part)
-    (setq find-cfiles--hfilename find-cfiles-hfilename)
-    (setq find-cfiles--cfilename find-cfiles-cfilename)
+    (setq find-cfiles--hext find-cfiles-hext)
+    (setq find-cfiles--cext find-cfiles-cext)
     (setq find-cfiles--user-answer (read-from-minibuffer "No such file: find C files (n or c-header/h-header, empty for default)?"))
-    (setq find-cfiles--proto-hfilename nil)
-    (setq find-cfiles--proto-cfilename nil)
     (if (let ((case-fold-search nil))
 	  (and (> (length find-cfiles--user-answer) 0) 
 	       (string= (substring find-cfiles--user-answer 0 1) "n")))
 	(eval nil)
       (if (let ((case-fold-search nil))
 	    (string= find-cfiles--user-answer ""))
-	  (setq find-cfiles--hfilename find-cfiles-hfilename)
-	  (setq find-cfiles--cfilename find-cfiles-cfilename)
-	  (setq find-cfiles--proto-hfilename nil)
-	  (setq find-cfiles--proto-cfilename nil)
+	  (setq find-cfiles--hext find-cfiles-hext)
+	  (setq find-cfiles--cext find-cfiles-cext)
 ;;;	(setq find-cfiles--cfilename find-cfiles--user-answer)
 	  ;; put all after / in hfile, the rest in cfile, using defualts for empty
 	  (if (string-match "/" find-cfiles--user-answer)
 	      (progn
-		(setq find-cfiles--cfilename 
+		(setq find-cfiles--cext
 		      (substring find-cfiles--user-answer 0 (string-match "/" find-cfiles--user-answer)))
-		(setq find-cfiles--hfilename 
+		(setq find-cfiles--hext
 		      (substring find-cfiles--user-answer (match-end 0) (length find-cfiles--user-answer)))
-		(if (< (length find-cfiles--cfilename) 1)
-		    (setq find-cfiles--cfilename  find-cfiles-cfilename))
-		(if (< (length find-cfiles--hfilename) 1)
-		    (setq find-cfiles--hfilename  find-cfiles-hfilename)))
+		(if (< (length find-cfiles--cext) 1)
+		    (setq find-cfiles--cext  find-cfiles-cext))
+		(if (< (length find-cfiles--hext) 1)
+		    (setq find-cfiles--hext  find-cfiles-hext)))
 ;;;     else part
-	  (setq find-cfiles--cfilename find-cfiles--user-answer)
-	  (setq find-cfiles--hfilename find-cfiles-hfilename)))
+	  (setq find-cfiles--cext find-cfiles--user-answer)
+	  (setq find-cfiles--hext find-cfiles-hext)))
 ;;;   Set up windows/frames
       (if (eval find-cfiles-other-frame)
 	  (select-frame (make-frame find-cfiles-other-frame-parameters))
 	(delete-other-windows))
 ;;;   Set up files (shuld split this in FUNCTIONS and use with args!!!!!)
-      (let ((current-name (buffer-file-name)) 
-	    (dead-buffer (current-buffer)))
-	(if (not (or (file-readable-p (concat current-name find-cfiles--hfilename)) 
-		     (get-file-buffer (concat current-name find-cfiles--hfilename))
-		     (setq find-cfiles--proto-hfilename (find-cfiles--check-list-for-existing-files find-cfiles-hfilenamelist))
-))
+      (let ((current-name (buffer-file-name))
+            (def-hfile    (concat buffer-file-name find-cfiles--hext))
+            (def-cfile    (concat buffer-file-name find-cfiles--cext))
+            (notdef-hfile nil)
+            (notdef-cfile mil)
+	    (dead-buffer  (current-buffer)))
+	(if (not (or (file-readable-p def-hfile)
+		     (get-file-buffer def-hfile)
+		     (setq notdef-hfile (find-cfiles--check-pref-suff-combos current-name find-cfiles-hdirpreflist find-cfiles-hextlist))
+                     )
+                 )
 	    (progn 
-	      (find-file (concat current-name find-cfiles--hfilename))
-	      (find-cfiles-fillproto find-cfiles-proto-filename current-name find-cfiles--hfilename))
-	  (find-file (concat current-name (or find-cfiles--proto-hfilename find-cfiles--hfilename))))
-	(if (not (or (file-readable-p (concat current-name find-cfiles--cfilename)) 
-		     (get-file-buffer (concat current-name find-cfiles--cfilename))
-		     (setq find-cfiles--proto-cfilename (find-cfiles--check-list-for-existing-files find-cfiles-cfilenamelist))
-))
+	      (find-file def-hfile)
+	      (find-cfiles-fillproto find-cfiles-proto-filename current-name find-cfiles--hext))
+	    (find-file (or notdef-hfile def-hfile))
+        )
+	(if (not (or (file-readable-p def-cfile) 
+		     (get-file-buffer def-cfile)
+		     (setq notdef-cfile (find-cfiles--check-pref-suff-combos current-name find-cfiles-cdirpreflist find-cfiles-cextlist))
+                     )
+                 )
 	    (progn 
 	      (set-buffer 
-	       (find-file-other-window (concat current-name find-cfiles--cfilename)))
+	       (find-file-other-window def-cfile))
 	      (find-cfiles-fillproto find-cfiles-proto-filename current-name find-cfiles--cfilename))
 	(set-buffer 
-	 (find-file-other-window (concat current-name (or find-cfiles--proto-cfilename find-cfiles--cfilename)))))
-	(or (kill-buffer dead-buffer) 
+	 (find-file-other-window (or notdef-cfile def-cfile))))
+	(or (kill-buffer dead-buffer)
 	    (message "Warning: cfiles scratch buffer not killed!"))
 	(eval t)))))
 
@@ -185,7 +187,7 @@ as absolute fully-qualified paths."
 	(filelist nil))
 
     (setq filelist 
-	  (mapcar '(lambda (file) 
+	  (mapcar (lambda (file)
 		     (find-cfiles--find-skelfile (concat file filename)))
 		  (find-cfiles--file-name-directory-aslist
 		   (buffer-file-name))))
@@ -195,7 +197,8 @@ as absolute fully-qualified paths."
       (mapcar 'find-cfiles--include-skelfile filelist)
       (perform-replace find-cfiles-proto-regexp truename nil nil nil))))
 
-; For extension lists
+
+; For searching files through extension list -- not used now
 (defun find-cfiles--check-list-for-existing-files (extension-list)
 (car (delq 'nil (mapcar 'find-cfiles--return-existing-filename extension-list))))
 
@@ -205,26 +208,53 @@ as absolute fully-qualified paths."
     extension
   nil))
 
-;;;; Our marvellous user variables for you to admire and trash up
+; For searching files through dirictory prefix and extension lists
+(defun find-cfiles--check-pref-suff-combos (current-name pref-list suff-list)
+  (let ((llll)
+        (curdir   (file-name-directory    current-name))
+        (curfbase (file-name-nondirectory current-name))
+        )
+    (dolist (pft pref-list)
+      (dolist (sft suff-list)
+        (let ((curfile (concat curdir pft curfbase sft)))
+          (message (concat "trying " curfile))
+          (if (or (file-readable-p curfile)
+                  (get-file-buffer curfile))
+              (push  curfile llll)
+            )
+          )
+        )
+      )
+    (car (nreverse llll))
+    ))
+
+
+;;;; User variables.
   
-(defvar find-cfiles-cfilename "cxx"
+(defvar find-cfiles-cext "cxx"
   "*The extension for C files used in finding C files and ther headers
 when the user specifies a non-existing dot terminated file.")
 
-(defvar find-cfiles-hfilename "h"
+(defvar find-cfiles-hext "h"
   "*The extension for header files used in finding C files and ther headers
 when the user specifies a non-existing dot terminated file.")
+
+(defvar find-cfiles-cextlist '("cxx" "cc" "C" "cpp")
+  "*The C file extensions find-cfile uses to check for existing C files. First match used.")
+
+(defvar find-cfiles-hextlist '("h" "hxx" "hh" "H" "hpp")
+  "*The H file extensions find-cfile uses to check for existing H files. First match used.")
+
+(defvar find-cfiles-cdirpreflist '("")
+  "*The C file directory prefixes find-cfile uses to check for existing C files. First match used.")
+
+(defvar find-cfiles-hdirpreflist '("")
+  "*The H file directory prefixes find-cfile uses to check for existing H files. First match used.")
+
 
 (defvar find-cfiles-proto-filename ".SKEL"
   "*Used to find a skeleton file in home and current dir. Skeleton file
 is copied into the newly generated file with the same extension.")
-
-(defvar find-cfiles-cfilenamelist '("cxx" "C" "cpp" "cc")
-  "*The C file extensions find-cfile uses to check for existing C files. First match used.")
-
-(defvar find-cfiles-hfilenamelist '("h" "H" "hpp" "hh")
-  "*The C file extensions find-cfile uses to check for existing header files. First match used.")
-
 
 (defvar find-cfiles-proto-regexp "FNAME"
 "*Occurances of this regexp in proto file are replaced after inserting.")
