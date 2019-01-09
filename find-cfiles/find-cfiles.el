@@ -105,7 +105,7 @@ Used a hook in find-file-not-found-hooks."
             (def-hfile    (concat buffer-file-name find-cfiles--hext))
             (def-cfile    (concat buffer-file-name find-cfiles--cext))
             (notdef-hfile nil)
-            (notdef-cfile mil)
+            (notdef-cfile nil)
 	    (dead-buffer  (current-buffer)))
 	(if (not (or (file-readable-p def-hfile)
 		     (get-file-buffer def-hfile)
